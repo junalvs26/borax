@@ -44,7 +44,7 @@ from embedded_engine import BoraxLLM, list_local_models
 
 # Core Instances
 borax_llm = BoraxLLM()
-ollama_service = OllamaService()
+ollama_service = OllamaService(borax_llm=borax_llm)
 rag_engine = RAGEngine()
 knpack_manager = KNPackManager(rag_engine)
 knowledge_manager = KnowledgeManager(rag_engine=rag_engine, knpack_manager=knpack_manager)

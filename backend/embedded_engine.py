@@ -1,5 +1,8 @@
 import os
+import re
+import sys
 import glob
+import threading
 from typing import Generator, List, Dict, Any, Optional
 
 BORAX_MODELS_DIR = os.path.expanduser("~/.borax/models")
@@ -80,6 +83,7 @@ class BoraxLLM:
         self.model_path = None
         self._llm = None
         self.current_model_name = ""
+        self._lock = threading.Lock()
 
         if model_name_or_path:
             if os.path.exists(model_name_or_path):
@@ -149,19 +153,20 @@ class BoraxLLM:
 
         try:
             effective_max_tokens = min(max_tokens, max(256, self.n_ctx - 1000))
-            response = self._llm.create_chat_completion(
-                messages=payload_messages,
-                stream=True,
-                max_tokens=effective_max_tokens,
-                temperature=0.2,
-                top_p=0.9,
-                repeat_penalty=1.15
-            )
-            for chunk in response:
-                delta = chunk.get("choices", [{}])[0].get("delta", {})
-                content = delta.get("content", "")
-                if content:
-                    yield content
+            with self._lock:
+                response = self._llm.create_chat_completion(
+                    messages=payload_messages,
+                    stream=True,
+                    max_tokens=effective_max_tokens,
+                    temperature=0.2,
+                    top_p=0.9,
+                    repeat_penalty=1.15
+                )
+                for chunk in response:
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
         except Exception as e:
             print(f"[BORAX LLM] Erro durante a geração de streaming C++: {e}")
             yield f"[Erro na inferência local C++: {str(e)}]"

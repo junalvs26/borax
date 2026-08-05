@@ -8,13 +8,12 @@ class OllamaService:
     Adaptador de retrocompatibilidade para o BoraxLLM C++ Embutido.
     Elimina a dependência de portas HTTP, executáveis externos e do aplicativo Ollama.
     """
-    def __init__(self, base_url: str = "http://localhost:11434"):
+    def __init__(self, borax_llm: Optional[BoraxLLM] = None, base_url: str = "http://localhost:11434"):
         self.base_url = base_url
-        self._llm_instance: Optional[BoraxLLM] = None
+        self._llm_instance: Optional[BoraxLLM] = borax_llm
 
     def _get_llm(self, model_name: Optional[str] = None) -> BoraxLLM:
-        if not self._llm_instance or (model_name and self._llm_instance.current_model_name != model_name) or getattr(self._llm_instance, 'n_ctx', 0) < 4096:
-            print(f"[OllamaService] Criando nova instância do BoraxLLM com n_ctx=4096...")
+        if not self._llm_instance:
             self._llm_instance = BoraxLLM(model_name_or_path=model_name, n_ctx=4096)
         return self._llm_instance
 
