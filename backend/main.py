@@ -164,9 +164,14 @@ async def ingest_endpoint(
         if cleanup_temp and target_path and os.path.exists(target_path):
             os.remove(target_path)
 
+from search_trigger import should_search_web
+from smart_web_search import SmartWebSearch
+
+smart_web_searcher = SmartWebSearch()
+
 @app.post("/api/query")
 async def query_endpoint(request: QueryRequest):
-    """Query RAG context from multi-base LanceDB tables and stream chat response via BoraxLLM with sliding window memory."""
+    """Query RAG context from multi-base LanceDB tables + Autonomous Web Search and stream chat response via BoraxLLM."""
     active_cartridge = knowledge_manager.get_active_status()
     default_borax_prompt = (
         "Você é um pesquisador sênior e redator científico de elite da Plataforma BORAX.\n"
@@ -176,12 +181,14 @@ async def query_endpoint(request: QueryRequest):
         "2. Introdução e Justificativa Teórica\n"
         "3. Objetivos (Geral e Específicos)\n"
         "4. Metodologia Detalhada e Materiais\n"
-        "5. Cronograma de Execução e Resultados Esperados."
+        "5. Cronograma de Execução e Resultados Esperados.\n"
+        "Ao utilizar dados da web, cite as fontes no texto e inclua no final a seção '📌 **Fontes e Referências Consultadas:**'."
     )
     system_prompt = active_cartridge.get("system_prompt") or default_borax_prompt
     target_tables = active_cartridge.get("table_names") or [request.table_name or DEFAULT_TABLE]
     
     rag_context_text = ""
+    active_cds_has_answer = False
     if request.use_rag:
         contexts = await asyncio.to_thread(
             rag_engine.query_context,
@@ -191,20 +198,39 @@ async def query_endpoint(request: QueryRequest):
             min_score=0.45
         )
         if contexts:
+            active_cds_has_answer = True
             rag_context_text = "\n---\n".join([f"[{c.get('source_table', 'base')} - Score: {c.get('similarity_score', 0)}]: {c['text'][:400]}" for c in contexts])
 
     payload_messages = [msg.model_dump() for msg in request.messages]
+
+    # Autonomous Web Search decision
+    need_web_search = should_search_web(
+        user_message=request.query,
+        history=payload_messages,
+        active_cds_has_answer=active_cds_has_answer
+    )
+
+    web_context_text = ""
+    if need_web_search:
+        print(f"[BORAX Web Search] Acionando busca autônoma para: '{request.query}'")
+        web_results = await asyncio.to_thread(smart_web_searcher.search, request.query)
+        if web_results:
+            web_context_text = smart_web_searcher.format_web_context(web_results)
+
+    combined_context = f"{rag_context_text}\n\n{web_context_text}".strip()
     
-    # Consolidate Sliding Window (10 turns) + RAG Context + Query
+    # Consolidate Sliding Window (10 turns) + RAG/Web Context + Query
     consolidated_query = ChatHistoryManager.build_consolidated_prompt(
         query=request.query,
         messages=payload_messages,
-        rag_context=rag_context_text
+        rag_context=combined_context
     )
 
     final_payload_messages = [{"role": "user", "content": consolidated_query}]
 
     async def stream_generator():
+        if need_web_search:
+            yield "🌐 *Pesquisando fontes atualizadas na web...*\n\n"
         async for token in ollama_service.chat_stream(request.model, final_payload_messages, system_prompt):
             yield token
 
