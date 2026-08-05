@@ -42,18 +42,30 @@ class SmartWebSearch:
             print(f"[SmartWebSearch] Nenhuma fonte externa encontrada para: '{query}'")
             return []
 
-        return results[:num_results]
+        # Deduplicação estrita por URL e Título
+        seen_urls = set()
+        seen_titles = set()
+        deduped = []
+        for r in results:
+            url_norm = r["url"].lower().rstrip("/")
+            title_norm = r["title"].lower().strip()
+            if url_norm not in seen_urls and title_norm not in seen_titles:
+                seen_urls.add(url_norm)
+                seen_titles.add(title_norm)
+                deduped.append(r)
+
+        return deduped[:min(3, num_results)]
 
     @staticmethod
     def format_web_context(results: List[Dict[str, str]]) -> str:
-        """Format web search results into a clean structured prompt block."""
+        """Format web search results into a clean raw data context block without repetitive pre-made text."""
         if not results:
             return ""
 
-        lines = ["[CONTEXTO DA PESQUISA WEB AUTÔNOMA (FONTES ATUALIZADAS)]:"]
-        for idx, res in enumerate(results, 1):
-            lines.append(f"{idx}. Fonte: [{res['title']}]({res['url']})")
-            lines.append(f"   Conteúdo: {res['snippet']}\n")
+        lines = ["--- DADOS BRUTOS DA PESQUISA WEB (FONTES REAIS) ---"]
+        for idx, res in enumerate(results[:3], 1):
+            snippet_clean = res['snippet'].replace("\n", " ").strip()
+            lines.append(f"[FONTE {idx}]: {res['title']} | {snippet_clean} | URL: {res['url']}")
 
-        lines.append("INSTRUÇÃO DE CITAÇÃO: Ao responder, fundamente o texto com essas informações e inclua no final a seção exatamente com o título '📌 **Fontes e Referências Consultadas:**' com os links das páginas.")
+        lines.append("\nInstrução: Utilize estas informações brutas apenas como fundamentação científica e citação. Não repita listas de links no corpo do texto.")
         return "\n".join(lines)

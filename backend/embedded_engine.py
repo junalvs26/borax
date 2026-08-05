@@ -160,7 +160,8 @@ class BoraxLLM:
                     max_tokens=effective_max_tokens,
                     temperature=0.2,
                     top_p=0.9,
-                    repeat_penalty=1.15
+                    repeat_penalty=1.18,
+                    frequency_penalty=0.5
                 )
                 for chunk in response:
                     delta = chunk.get("choices", [{}])[0].get("delta", {})

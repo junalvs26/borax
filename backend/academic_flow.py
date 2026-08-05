@@ -8,7 +8,7 @@ ACADEMIC_DOC_PATTERNS = [
 ]
 
 COMPILE_PATTERNS = [
-    r'\b(compil|gerar\s+arquivo|gerar\s+o\s+docx|baixar|exportar|gerar\s+o\s+texto\s+completo|gerar\s+o\s+documento|aprovado|pode\s+gerar|pode\s+compilar|faça\s+o\s+docx)\b'
+    r'\b(compil|gerar\s+arquivo|gerar\s+o\s+docx|baixar|exportar|gerar\s+o\s+texto\s+completo|gerar\s+o\s+documento|aprovado|pode\s+gerar|pode\s+compilar|faça\s+o\s+docx|gere\s+esse\s+tcc|faça\s+esse\s+tcc|escreva\s+o\s+tcc|gerar\s+tcc|crie\s+o\s+tcc)\b'
 ]
 
 class AcademicFlowManager:
