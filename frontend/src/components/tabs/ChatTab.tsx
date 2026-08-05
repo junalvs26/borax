@@ -251,60 +251,8 @@ export const ChatTab: React.FC = () => {
       return;
     }
 
-    // Document Wizard Initiation Trigger (Detects creation verb / request + document/project/spreadsheet format)
-    const hasCreateVerb = /(gerar|criar|fazer|exportar|salvar|baixar|escrever|montar|crie|faça|faca|gere|monte|elabore|elaborar|construa|construir|desenvolva|desenvolver|quero|queria|gostaria|preciso|pode|tem\s+como|faz)/i.test(trimmedInput);
-    const hasDocFormat = /(docx|word|pdf|txt|documento|relatório|relatorio|trabalho|artigo|tcc|arquivo|projeto|pibic|planilha|excel|tabela|proposta|orçamento|orcamento|estudo|pesquisa|monografia|resumo)/i.test(trimmedInput);
-
-    const isDocGenIntent = powerTrigger === '@gerar-documento' || 
-      /^(@gerar-documento|\/gerar-documento)/i.test(trimmedInput) || 
-      (hasCreateVerb && hasDocFormat) ||
-      /^(oi|olá|hey)?\s*,?\s*(gere|crie|monte|faça|faca|desenvolva|quero|queria|gostaria|preciso|pode)\s+(me|nos|um|uma|este|esse|o|a)?\s*(docx|word|pdf|planilha|excel|projeto|trabalho|documento|relatório|relatorio|artigo|pibic|tcc)/i.test(trimmedInput);
-
-    if (isDocGenIntent) {
-      const assistantMsgId = (Date.now() + 1).toString();
-      let promptClean = trimmedInput
-        .replace(/^(oi|olá|hey|por\s+favor)\s*,?\s*/i, '')
-        .replace(/^(@[\w-]+|\/[\w-]+)\s*/i, '')
-        .replace(/^(eu\s+)?(queria|gostaria|preciso|quero|gostaria\s+de)\s+(um|uma|de\s+um|de\s+uma)?\s*/i, '')
-        .trim() || '';
-      
-      // If prompt is generic (e.g. "docx pro meu projeto pibic" or "gere o trabalho"), format promptClean cleanly
-      const isGenericPrompt = !promptClean || /^(gerar|criar|fazer|exportar|salvar|baixar|gere|crie|monte|faça|docx|pdf|word)\s*(o|um|uma)?\s*(docx|word|documento|pdf|arquivo|projeto|trabalho)?$/i.test(promptClean);
-      
-      if (isGenericPrompt) {
-        const recentHistoryText = messages.slice(-5).map(m => m.content).join(' ');
-        const pibicMatch = recentHistoryText.match(/(pibic|projeto\s+[\w\s]{3,30}|pesquisa\s+[\w\s]{3,30})/i);
-        if (pibicMatch) {
-          promptClean = `Projeto ${pibicMatch[0].toUpperCase()}`;
-        } else {
-          promptClean = 'Projeto Técnico e Trabalho Acadêmico';
-        }
-      }
-
-      try {
-        const wizardRes = await initiateDocumentWizard(promptClean);
-        setMessages(prev => [
-          ...prev,
-          {
-            id: assistantMsgId,
-            role: 'assistant',
-            content: 'Selecione o tipo, tom de voz e formato no card abaixo para gerar o documento personalizado:',
-            wizardData: {
-              promptOriginal: promptClean,
-              suggestedPreferences: wizardRes.suggested_preferences
-            }
-          }
-        ]);
-      } catch (err: any) {
-        setMessages(prev => [
-          ...prev,
-          { id: assistantMsgId, role: 'assistant', content: `⚠️ Erro ao iniciar moldagem de documento: ${err.message}` }
-        ]);
-      } finally {
-        setIsStreaming(false);
-      }
-      return;
-    }
+    // Conversational UX: All requests flow through natural streaming chat
+    // (Static DocumentWizardCard deactivated in favor of Academic Advisor consultation)
 
     // Process inline power or file attachment
     if (powerTrigger || currentFile) {

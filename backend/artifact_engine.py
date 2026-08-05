@@ -2,6 +2,7 @@ import os
 import re
 import json
 import csv
+import uuid
 from typing import Dict, Any, List, Optional
 
 # --- DOCX Imports ---
@@ -78,16 +79,19 @@ class ArtifactEngine:
     def __init__(self):
         pass
 
-    # =========================================================================
-    # 1. STRATEGY A: DOCX (ABNT Extenso com Tabelas Nativas)
-    # =========================================================================
-    def compile_docx(self, markdown_text: str, filepath: str, title: str = "Trabalho Acadêmico") -> str:
+    def compile_docx(self, markdown_text: str, filepath: Optional[str] = None, title: str = "Trabalho Acadêmico") -> str:
         """
         Compiles long Markdown into a fully compliant ABNT Word (.docx) document.
         - Margins: Top 3cm, Left 3cm, Bottom 2cm, Right 2cm.
         - Font: Arial 12pt, 1.5 line spacing, 1.25cm first line indent, Justified.
         - Native Word Tables with dark header styling and clean borders.
         """
+        if not filepath:
+            exports_dir = os.path.expanduser("~/.borax/exports")
+            os.makedirs(exports_dir, exist_ok=True)
+            safe_title = re.sub(r'[^\w\s-]', '', title).strip().replace(" ", "_").lower() or "documento_abnt"
+            filepath = os.path.join(exports_dir, f"{safe_title}_{uuid.uuid4().hex[:6]}.docx")
+
         doc = docx.Document()
 
         # Set ABNT Page Margins
