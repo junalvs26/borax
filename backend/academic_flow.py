@@ -33,14 +33,39 @@ class AcademicFlowManager:
         return any(re.search(pattern, msg_clean) for pattern in COMPILE_PATTERNS)
 
     @staticmethod
-    def get_dynamic_consultative_instruction(user_message: str) -> str:
-        """
-        Gera instrução dinâmica para a LLM atuar como Orientador de Doutorado sem usar questionários rígidos.
-        """
-        return (
-            "INSTRUÇÃO CONSULTIVA DINÂMICA:\n"
-            "O usuário está desenvolvendo um trabalho acadêmico. Como Orientador de Doutorado:\n"
-            "1. Acolha a ideia do usuário e faça uma análise acadêmica inicial do tema proposto.\n"
-            "2. Faça de 1 a 3 perguntas inteligentes, fluídas e contextualizadas específicas para o tema dele (evite questionários engessados) para ajudar a delimitar o problema de pesquisa, a metodologia e o referencial teórico.\n"
-            "3. Apresente uma proposta de sumário/estrutura inicial para ele avaliar."
-        )
+    def extract_academic_topic(user_message: str) -> Optional[str]:
+        """Extrai o tema da pesquisa se presente (ex: 'sobre engenharia genética')."""
+        if not user_message:
+            return None
+        match = re.search(r'\b(sobre|em|de|com\s+foco\s+em|focado\s+em)\s+([\w\s]{3,50})', user_message, re.IGNORECASE)
+        if match:
+            topic = match.group(2).strip()
+            topic = re.sub(r'[^\w\s]', '', topic)
+            if len(topic) >= 3 and topic.lower() not in ["meu tcc", "meu trabalho", "minha tese", "um artigo", "meu artigo"]:
+                return topic
+        return None
+
+    @classmethod
+    def get_academic_system_prompt(cls, user_message: str) -> str:
+        """Retorna o System Prompt dinâmico de Orientador de Doutorado ajustado ao tema do usuário."""
+        topic = cls.extract_academic_topic(user_message)
+        if topic:
+            return (
+                f"Você é um Pesquisador e Orientador Acadêmico de Doutorado da Plataforma BORAX.\n"
+                f"O usuário quer desenvolver um TCC/trabalho acadêmico sobre o tema: {topic.upper()}.\n\n"
+                f"ESTRUTURA DA SUA RESPOSTA (SIGA RIGOROSAMENTE):\n"
+                f"1. Acolhimento e Relevância: Apresente-se como Orientador Acadêmico de Doutorado e comente sucintamente o impacto científico de {topic}.\n"
+                f"2. Abordagens Temáticas: Sugira 3 recortes de pesquisa instigantes sobre {topic}.\n"
+                f"3. Sumário Preliminar: Proponha uma estrutura inicial em capítulos formais ABNT.\n"
+                f"4. Pergunta de Condução: Faça 2 perguntas diretas para o usuário definir o rumo da investigação."
+            )
+        else:
+            return (
+                "Você é um Pesquisador e Orientador Acadêmico de Doutorado da Plataforma BORAX.\n"
+                "O usuário solicitou apoio para elaborar um TCC/trabalho acadêmico, mas ainda não informou o tema exato.\n\n"
+                "ESTRUTURA DA SUA RESPOSTA (SIGA RIGOROSAMENTE):\n"
+                "1. Acolhimento: 'Excelente! Como seu Orientador Acadêmico de Doutorado, estou aqui para te conduzir do zero até a aprovação do seu TCC.'\n"
+                "2. Diagnóstico: Pergunte a área ou curso de estudo dele (ex: Saúde, Direito, Tecnologia, Engenharia, Humanas).\n"
+                "3. Sugestões de Temas: Apresente 3 ideias de temas científicos em alta para ele escolher.\n"
+                "4. Metodologia: Pergunte se prefere revisão bibliográfica, estudo de caso ou aplicação prática."
+            )

@@ -177,6 +177,12 @@ async def query_endpoint(request: QueryRequest):
     """Query RAG context from multi-base LanceDB tables + Autonomous Web Search and stream chat response via BoraxLLM."""
     active_cartridge = knowledge_manager.get_active_status()
     system_prompt = active_cartridge.get("system_prompt") or DEFAULT_SCIENTIFIC_SYSTEM_PROMPT
+    
+    # 1. Override system prompt if user is in Academic / TCC Consultation Flow
+    is_academic = AcademicFlowManager.is_academic_request(request.query)
+    if is_academic:
+        system_prompt = AcademicFlowManager.get_academic_system_prompt(request.query)
+
     target_tables = active_cartridge.get("table_names") or [request.table_name or DEFAULT_TABLE]
     
     rag_context_text = ""
@@ -195,7 +201,24 @@ async def query_endpoint(request: QueryRequest):
 
     payload_messages = [msg.model_dump() for msg in request.messages]
 
-    # Autonomous Web Search decision via WebSearchAgent
+    # 2. Check if user requested document compilation (.docx)
+    if is_academic and AcademicFlowManager.is_ready_to_compile(request.query, payload_messages):
+        compilation_res = await asyncio.to_thread(
+            academic_writer_engine.process_academic_turn,
+            query=request.query,
+            messages=payload_messages,
+            rag_context=rag_context_text,
+            force_compile=True
+        )
+        
+        async def compilation_stream():
+            yield compilation_res["content"] + "\n\n"
+            meta_json = json.dumps({"downloadFile": compilation_res["file_metadata"]})
+            yield f"\n\n```json:metadata\n{meta_json}\n```"
+
+        return StreamingResponse(compilation_stream(), media_type="text/event-stream")
+
+    # 3. Autonomous Web Search decision via WebSearchAgent
     need_web_search = web_search_agent.should_search(
         query=request.query,
         history=payload_messages,
