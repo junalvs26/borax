@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual Environments
+backend/venv/
+venv/
+env/
+ENV/
+
+# Node dependencies & build outputs
+frontend/node_modules/
+node_modules/
+frontend/dist/
+dist/
+src-tauri/target/
+
+# Local databases & model stores
+backend/lancedb_data/
+*.lancedb
+*.gguf
+.borax/
+lancedb_data/
+
+# Logs & temp files
+*.log
+*.tmp
+temp_test/
+miau1/
+
+# System / OS files
+.DS_Store
+Thumbs.db
+desktop.ini

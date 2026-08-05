@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0B0913;
+    color: #F4F4F6;
+    font-family: 'Inter', 'Geist', sans-serif;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* Custom BORAX Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0B0913;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2B2443;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6D28FF;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #2B2443;
+  border-radius: 10px;
+}
