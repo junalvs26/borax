@@ -166,34 +166,46 @@ async def ingest_endpoint(
 
 @app.post("/api/query")
 async def query_endpoint(request: QueryRequest):
-    """Query RAG context from multi-base LanceDB tables and stream chat response via BoraxLLM."""
+    """Query RAG context from multi-base LanceDB tables and stream chat response via BoraxLLM with sliding window memory."""
     active_cartridge = knowledge_manager.get_active_status()
     default_borax_prompt = (
-        "Você é o BORAX, uma Plataforma de IA Local Modular avançada. "
-        "Você PODE e DEVE auxiliar na criação, escrita, estruturação e geração de documentos (Word ABNT .docx, Planilhas Excel .xlsx com fórmulas e relatórios PDF). "
-        "NUNCA recuse solicitações de criação ou elaboração de trabalhos, projetos ou arquivos. Sempre ajude o usuário com entusiasmo, "
-        "fornecendo textos completos, ricas estruturas e orientações claras."
+        "Você é um pesquisador sênior e redator científico de elite da Plataforma BORAX.\n"
+        "NUNCA responda com promessas, desculpas ou listas genéricas como 'estudar a concorrência' quando for solicitado a gerar um projeto ou documento.\n"
+        "SEMPRE redija o conteúdo real diretamente, dividindo em:\n"
+        "1. Título e Resumo Executivo\n"
+        "2. Introdução e Justificativa Teórica\n"
+        "3. Objetivos (Geral e Específicos)\n"
+        "4. Metodologia Detalhada e Materiais\n"
+        "5. Cronograma de Execução e Resultados Esperados."
     )
     system_prompt = active_cartridge.get("system_prompt") or default_borax_prompt
     target_tables = active_cartridge.get("table_names") or [request.table_name or DEFAULT_TABLE]
     
+    rag_context_text = ""
     if request.use_rag:
         contexts = await asyncio.to_thread(
             rag_engine.query_context,
             query=request.query,
             table_name=target_tables,
-            top_k=request.top_k or 3
+            top_k=request.top_k or 3,
+            min_score=0.45
         )
         if contexts:
-            context_text = "\n---\n".join([f"[{c.get('source_table', 'base')}]: {c['text'][:350]}" for c in contexts])
-            system_prompt += f"\n\n[CONTEXTO RELEVANTE DAS BASES ATIVAS (MULTI-CARTUCHO)]:\n{context_text}\n\nResponda de forma sucinta e precisa."
+            rag_context_text = "\n---\n".join([f"[{c.get('source_table', 'base')} - Score: {c.get('similarity_score', 0)}]: {c['text'][:400]}" for c in contexts])
 
     payload_messages = [msg.model_dump() for msg in request.messages]
-    if not payload_messages or payload_messages[-1]["role"] != "user":
-        payload_messages.append({"role": "user", "content": request.query})
+    
+    # Consolidate Sliding Window (10 turns) + RAG Context + Query
+    consolidated_query = ChatHistoryManager.build_consolidated_prompt(
+        query=request.query,
+        messages=payload_messages,
+        rag_context=rag_context_text
+    )
+
+    final_payload_messages = [{"role": "user", "content": consolidated_query}]
 
     async def stream_generator():
-        async for token in ollama_service.chat_stream(request.model, payload_messages, system_prompt):
+        async for token in ollama_service.chat_stream(request.model, final_payload_messages, system_prompt):
             yield token
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")

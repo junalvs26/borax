@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from typing import List, Dict, Any, Optional
 from pathlib import Path
@@ -138,9 +139,13 @@ class RAGEngine:
         self,
         query: str,
         table_name: Any = DEFAULT_TABLE,
-        top_k: int = 3
+        top_k: int = 3,
+        min_score: float = 0.45
     ) -> List[Dict[str, Any]]:
-        """Vector similarity search in specified LanceDB table(s) combining multi-base results."""
+        """
+        Hybrid Search & Re-ranking (Vector Similarity + Text Keyword Boost).
+        Calculates similarity score and re-ranks context chunks above min_score.
+        """
         tables_to_query = []
         if isinstance(table_name, list):
             tables_to_query = table_name
@@ -153,22 +158,39 @@ class RAGEngine:
         if not valid_tables:
             return []
 
+        query_clean = (query or "").lower().strip()
+        query_words = set(re.findall(r'\b\w{4,}\b', query_clean))
+
         query_emb = self.embedder.encode(query).tolist()
         combined_results = []
 
         for tbl_name in valid_tables:
             try:
                 table = self.db.open_table(tbl_name)
-                res = table.search(query_emb).limit(top_k).to_list()
+                res = table.search(query_emb).limit(top_k * 2).to_list()
                 for r in res:
                     if r.get("id") != "init":
                         r["source_table"] = tbl_name
-                        combined_results.append(r)
+                        
+                        dist = r.get("_distance", 1.0)
+                        # Normalize L2 distance to similarity score (0.0 to 1.0)
+                        vector_score = max(0.0, 1.0 - (float(dist) / 2.0))
+                        
+                        # Hybrid Keyword Boost
+                        text_lower = (r.get("text") or "").lower()
+                        keyword_matches = sum(1 for w in query_words if w in text_lower)
+                        keyword_boost = min(0.3, keyword_matches * 0.08)
+                        
+                        combined_score = vector_score + keyword_boost
+                        r["similarity_score"] = round(combined_score, 4)
+                        
+                        if combined_score >= min_score:
+                            combined_results.append(r)
             except Exception as e:
                 print(f"[RAGEngine Error] Falha ao consultar tabela '{tbl_name}': {e}")
 
-        if combined_results and "_distance" in combined_results[0]:
-            combined_results.sort(key=lambda x: x.get("_distance", 0))
+        # Re-rank by combined similarity score in descending order
+        combined_results.sort(key=lambda x: x.get("similarity_score", 0.0), reverse=True)
 
         return combined_results[:top_k]
 

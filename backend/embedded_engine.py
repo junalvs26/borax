@@ -4,6 +4,17 @@ from typing import Generator, List, Dict, Any, Optional
 
 BORAX_MODELS_DIR = os.path.expanduser("~/.borax/models")
 
+DEFAULT_SCIENTIFIC_SYSTEM_PROMPT = (
+    "Você é um pesquisador sênior e redator científico de elite da Plataforma BORAX.\n"
+    "NUNCA responda com promessas, desculpas ou listas genéricas como 'estudar a concorrência' quando for solicitado a gerar um projeto ou documento.\n"
+    "SEMPRE redija o conteúdo real diretamente, dividindo em:\n"
+    "1. Título e Resumo Executivo\n"
+    "2. Introdução e Justificativa Teórica\n"
+    "3. Objetivos (Geral e Específicos)\n"
+    "4. Metodologia Detalhada e Materiais\n"
+    "5. Cronograma de Execução e Resultados Esperados."
+)
+
 def get_models_dir() -> str:
     """Return local storage path for BORAX GGUF models (~/.borax/models/)."""
     os.makedirs(BORAX_MODELS_DIR, exist_ok=True)
@@ -55,7 +66,7 @@ class BoraxLLM:
     def __init__(
         self,
         model_name_or_path: Optional[str] = None,
-        n_ctx: int = 8192,
+        n_ctx: int = 4096,
         n_threads: int = 2,
         n_gpu_layers: int = 0
     ):
@@ -107,18 +118,18 @@ class BoraxLLM:
     def generate_stream(
         self,
         prompt: str = "",
-        system_prompt: str = "Você é um assistente de IA local especializado.",
+        system_prompt: str = DEFAULT_SCIENTIFIC_SYSTEM_PROMPT,
         messages: Optional[List[Dict[str, str]]] = None,
         max_tokens: int = 4096
     ) -> Generator[str, None, None]:
         """Generate response tokens in streaming directly from C++ memory (no HTTP required)."""
         if not self._llm or self.n_ctx < 4096:
-            self.n_ctx = 8192
+            self.n_ctx = 4096
             self._load_llama()
 
         payload_messages = []
-        if system_prompt:
-            payload_messages.append({"role": "system", "content": system_prompt})
+        eff_system_prompt = system_prompt or DEFAULT_SCIENTIFIC_SYSTEM_PROMPT
+        payload_messages.append({"role": "system", "content": eff_system_prompt})
 
         user_or_chat_msgs = []
         if messages:
@@ -138,7 +149,9 @@ class BoraxLLM:
                 messages=payload_messages,
                 stream=True,
                 max_tokens=effective_max_tokens,
-                temperature=0.7
+                temperature=0.2,
+                top_p=0.9,
+                repeat_penalty=1.15
             )
             for chunk in response:
                 delta = chunk.get("choices", [{}])[0].get("delta", {})
@@ -152,7 +165,7 @@ class BoraxLLM:
     def generate_text(
         self,
         prompt: str = "",
-        system_prompt: str = "Você é um assistente de IA local especializado.",
+        system_prompt: str = DEFAULT_SCIENTIFIC_SYSTEM_PROMPT,
         messages: Optional[List[Dict[str, str]]] = None,
         max_tokens: int = 4096
     ) -> str:
@@ -163,14 +176,14 @@ class BoraxLLM:
     def generate_long_text(
         self,
         prompt: str = "",
-        system_prompt: str = "Você é um redator sênior. NUNCA resuma. Escreva capítulos extensos, com introduções ricas, fundamentação teórica sólida, análise crítica e considerações finais detalhadas. Cada capítulo deve conter múltiplos parágrafos bem desenvolvidos.",
+        system_prompt: str = DEFAULT_SCIENTIFIC_SYSTEM_PROMPT,
         messages: Optional[List[Dict[str, str]]] = None,
         max_continues: int = 3
     ) -> str:
         """Generate long text with automatic continuation if generation hits token limit."""
         current_messages = []
-        if system_prompt:
-            current_messages.append({"role": "system", "content": system_prompt})
+        eff_system_prompt = system_prompt or DEFAULT_SCIENTIFIC_SYSTEM_PROMPT
+        current_messages.append({"role": "system", "content": eff_system_prompt})
 
         if messages:
             current_messages.extend(messages)

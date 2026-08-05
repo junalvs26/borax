@@ -83,3 +83,46 @@ class ChatHistoryManager:
             return {"status": "success", "message": f"Sessão '{session_id}' excluída com sucesso."}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+
+    @staticmethod
+    def get_sliding_window_context(messages: List[Dict[str, Any]], max_turns: int = 10) -> List[Dict[str, Any]]:
+        """Return the last max_turns (20 messages max) for floating sliding window memory."""
+        if not messages:
+            return []
+        max_msgs = max_turns * 2
+        return messages[-max_msgs:] if len(messages) > max_msgs else messages
+
+    @classmethod
+    def build_consolidated_prompt(
+        cls,
+        query: str,
+        messages: Optional[List[Dict[str, Any]]] = None,
+        rag_context: str = "",
+        cartridges: Optional[List[Dict[str, Any]]] = None
+    ) -> str:
+        """
+        Consolidate [HISTÓRICO RECENTE DA CONVERSA] + [CONTEXTO DOS CDS ATIVOS] + [MENSAGEM ATUAL DO USUÁRIO].
+        """
+        prompt_parts = []
+
+        # 1. Sliding Window History (Last 10 turns)
+        sliding_msgs = cls.get_sliding_window_context(messages or [], max_turns=10)
+        if sliding_msgs:
+            history_lines = []
+            for msg in sliding_msgs:
+                role = "USUÁRIO" if msg.get("role") == "user" else "ASSISTENTE"
+                content = (msg.get("content") or "").strip()
+                if content and not content.startswith("⚠️"):
+                    history_lines.append(f"{role}: {content[:500]}")
+            if history_lines:
+                prompt_parts.append("[HISTÓRICO RECENTE DA CONVERSA (ÚLTIMOS TURNOS)]:\n" + "\n".join(history_lines))
+
+        # 2. Context from active CDs / RAG
+        if rag_context and rag_context.strip():
+            prompt_parts.append(f"[CONTEXTO DOS CDS / BASES ATIVAS]:\n{rag_context.strip()}")
+
+        # 3. Current User Query
+        prompt_parts.append(f"[MENSAGEM ATUAL DO USUÁRIO]:\n{query.strip()}")
+
+        return "\n\n---\n\n".join(prompt_parts)
+
