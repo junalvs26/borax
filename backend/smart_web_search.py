@@ -38,14 +38,9 @@ class SmartWebSearch:
         except Exception as e:
             print(f"[SmartWebSearch Error] Falha na busca DuckDuckGo: {e}")
 
-        # Fallback Mock / Scraper if DDGS is throttled or empty
         if not results:
-            print(f"[SmartWebSearch] Executando busca de contingência para: '{query}'")
-            results.append({
-                "title": f"Pesquisa sobre {query[:40]}",
-                "snippet": f"Dados atualizados e referências acadêmicas sobre {query}.",
-                "url": "https://scholar.google.com"
-            })
+            print(f"[SmartWebSearch] Nenhuma fonte externa encontrada para: '{query}'")
+            return []
 
         return results[:num_results]
 

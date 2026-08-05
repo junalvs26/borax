@@ -165,9 +165,12 @@ async def ingest_endpoint(
             os.remove(target_path)
 
 from web_search_agent import WebSearchAgent
+from academic_flow import AcademicFlowManager
+from academic_writer_engine import AcademicWriterEngine
 from embedded_engine import DEFAULT_SCIENTIFIC_SYSTEM_PROMPT
 
 web_search_agent = WebSearchAgent()
+academic_writer_engine = AcademicWriterEngine()
 
 @app.post("/api/query")
 async def query_endpoint(request: QueryRequest):
