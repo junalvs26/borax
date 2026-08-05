@@ -93,36 +93,36 @@ class ChatHistoryManager:
         return messages[-max_msgs:] if len(messages) > max_msgs else messages
 
     @classmethod
-    def build_consolidated_prompt(
+    def build_consolidated_messages(
         cls,
         query: str,
+        system_prompt: str,
         messages: Optional[List[Dict[str, Any]]] = None,
-        rag_context: str = "",
-        cartridges: Optional[List[Dict[str, Any]]] = None
-    ) -> str:
+        rag_context: str = ""
+    ) -> List[Dict[str, str]]:
         """
-        Consolidate [HISTÓRICO RECENTE DA CONVERSA] + [CONTEXTO DOS CDS ATIVOS] + [MENSAGEM ATUAL DO USUÁRIO].
+        Build clean multi-turn ChatML messages for LLM without leaking internal bracket tags.
         """
-        prompt_parts = []
-
-        # 1. Sliding Window History (Last 10 turns)
-        sliding_msgs = cls.get_sliding_window_context(messages or [], max_turns=10)
-        if sliding_msgs:
-            history_lines = []
-            for msg in sliding_msgs:
-                role = "USUÁRIO" if msg.get("role") == "user" else "ASSISTENTE"
-                content = (msg.get("content") or "").strip()
-                if content and not content.startswith("⚠️"):
-                    history_lines.append(f"{role}: {content[:500]}")
-            if history_lines:
-                prompt_parts.append("[HISTÓRICO RECENTE DA CONVERSA (ÚLTIMOS TURNOS)]:\n" + "\n".join(history_lines))
-
-        # 2. Context from active CDs / RAG
+        result = []
+        
+        # 1. System Prompt + Clean RAG Context
+        full_system = system_prompt
         if rag_context and rag_context.strip():
-            prompt_parts.append(f"[CONTEXTO DOS CDS / BASES ATIVAS]:\n{rag_context.strip()}")
+            full_system += f"\n\n--- Contexto de Apoio ---\n{rag_context.strip()}"
+        
+        result.append({"role": "system", "content": full_system})
 
-        # 3. Current User Query
-        prompt_parts.append(f"[MENSAGEM ATUAL DO USUÁRIO]:\n{query.strip()}")
+        # 2. Native Multi-turn sliding window (last 10 turns = 20 messages max)
+        sliding_msgs = cls.get_sliding_window_context(messages or [], max_turns=10)
+        for msg in sliding_msgs:
+            role = msg.get("role", "user")
+            content = (msg.get("content") or "").strip()
+            if content and not content.startswith("⚠️") and not content.startswith("```json:metadata"):
+                result.append({"role": role, "content": content})
 
-        return "\n\n---\n\n".join(prompt_parts)
+        # 3. Append current user query if not already the last message
+        if not sliding_msgs or sliding_msgs[-1].get("content", "").strip() != query.strip():
+            result.append({"role": "user", "content": query.strip()})
+
+        return result
 

@@ -234,19 +234,18 @@ async def query_endpoint(request: QueryRequest):
 
     combined_context = f"{rag_context_text}\n\n{web_context_text}".strip()
     
-    # Consolidate Sliding Window (10 turns) + RAG/Web Context + Query
-    consolidated_query = ChatHistoryManager.build_consolidated_prompt(
+    # Consolidate Sliding Window (10 turns) + RAG/Web Context + Native ChatML Messages
+    final_payload_messages = ChatHistoryManager.build_consolidated_messages(
         query=request.query,
+        system_prompt=system_prompt,
         messages=payload_messages,
         rag_context=combined_context
     )
 
-    final_payload_messages = [{"role": "user", "content": consolidated_query}]
-
     async def stream_generator():
         if need_web_search:
             yield "🔍 *Pesquisando fontes atualizadas na web...*\n\n"
-        async for token in ollama_service.chat_stream(request.model, final_payload_messages, system_prompt):
+        async for token in ollama_service.chat_stream(request.model, final_payload_messages, system_prompt=""):
             yield token
 
     return StreamingResponse(stream_generator(), media_type="text/event-stream")
